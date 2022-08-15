@@ -5,9 +5,10 @@ from abc import ABCMeta, abstractmethod
 from collections import OrderedDict
 from core.exceptions import PreConditionNotSatisfiedError
 
+
 class Pool:
     """
-
+    A collection of tasks and/or stages.
     """
     tasks: list["PipelineElement"] = []
     stages: list["Stage"] = []
@@ -25,15 +26,24 @@ class Pool:
         """
         Register a stage with the pool.
         """
-        Pool.stages.append(Stage)
-        Pool.logger.debug(f"Registered {stage.name} in task pool")
+        Pool.stages.append(stage)
+        Pool.logger.debug("Registered %s in task pool", stage.name)
 
     @staticmethod
     def get_all_tasks():
+        """
+        :return: return all tasks in the pool
+        :rtype: list[PipelineElement]
+        """
         return Pool.tasks
 
     @staticmethod
     def get_all_stages():
+        """return all stages in the pool
+
+        :return: _description_
+        :rtype: list[Stage]
+        """
         return Pool.stages
 
 
@@ -42,7 +52,6 @@ class PipelineElement:
     An executable and composable entity that represents the test pipeline and provides
     functions to execute and log events from the test pipeline.
     """
-    __metaclass__ = ABCMeta
 
     def __init__(self, name, executable_type):
         self.name = name
@@ -55,76 +64,92 @@ class PipelineElement:
         self.hard_error_pre_condition = True
 
     def append_to_pipeline(self, pipeline_element):
+        """Appends a pipeline element to the execution pipeline
+
+        :param pipeline_element: A PipelineElement object to be appended to the pipeline
+        :type pipeline_element: PipelineElement
+        """
         self.pipeline_elements.append(pipeline_element)
 
     def extend_pipeline(self, pipeline_elements):
-        for pipeline_element in pipeline_elements:
-            self.append_to_pipeline(pipeline_element)
+        """
+        A utility function to extend the pipeline with a list of pipeline elements.
+
+        :param pipeline_elements: list of pipeline elements
+        :type pipeline_elements: list[PipelineElement]
+        """
+        self.pipeline_elements.extend(pipeline_elements)
+
 
     def pre_condition(self):
         """
         Override if certain checks need to be performed before executing the pipeline.
         Copy artifacts etc.
         """
-        pass
+        raise NotImplementedError
+
 
     def pre_condition_handler(self):
+        """Executes the pre-condition and handles the output and report generation
+
+        :return: a boolean indicationg whether the execution should continue or not
+        :rtype: bool
+        """
         return_status = False
         try:
             self.pre_condition()
             return_status = True
         except PreConditionNotSatisfiedError as err:
+            elements = ", ".join([element.name for element in self.pipeline_elements])
             if self.hard_error_pre_condition:
-                self.logger.error("The pre condition check for {type} {name} was not satisfied. "
+                self.logger.error("The pre condition check for %s %s was not satisfied. "
                                   "Therefore, the execution of the following pipeline elements is "
-                                  "being skipped: {elements}".format(
-                                      name=self.name,
-                                      type=self.type,
-                                      elements=', '.join(
-                                          ["{element}".format(element=element)
-                                           for element in self.pipeline_elements]
-                                      )))
+                                  "being skipped: %s", self.type, self.name, elements)
                 self.report["result"] = "exec_fail"
                 self.exit_code = 1
             else:
-                self.logger.warning("The pre condition check for {type} {name} was not satisfied. "
-                                    "However, we are continuing the execution of the tests".
-                                    format(name=self.name, type=self.type))
+                self.logger.warning("The pre condition check for %s %s was not satisfied. "
+                                    "However, we are continuing the execution of the tasks", self.type, self.name)
+
                 self.exit_code = 4  # pre_condition failed
                 return_status = True
-            self.logger.info("Exception info: {error}".format(
-                error=err.message), exc_info=True)
+            self.logger.info("Exception info: %s", err.message, exc_info=True)
             self.report["error"] = err.message
+            self.report["trace"] = traceback.format_exc()
+            self.report["exit_code"] = self.exit_code
+        except NotImplementedError:
+            self.logger.warning("The pre condition check for %s %s was not defined. "
+                                    "However, we are continuing the execution of the tasks", self.type, self.name)
+
+            self.exit_code = 5  # pre_condition not defined
+            return_status = True
+            self.report["error"] = "pre condition not defined"
             self.report["trace"] = traceback.format_exc()
             self.report["exit_code"] = self.exit_code
 
         return return_status
 
     def run(self):
+        """_summary_ executes the child pipeline elements"""
         for element in self.pipeline_elements:
             element.execute()
 
     def execute(self):
+        """"_summary_ executes the pipeline element"""
         if not self.pre_condition_handler():
-            self.logger.error("Pre condition failed for {type}: {name}".format(
-                name=self.name, type=self.type))
+            self.logger.error("Pre condition failed for %s: %s", self.type, self.name)
             return
-        self.logger.info("Executing Pipeline for {type} {name}".format(
-            name=self.name, type=self.type))
+        self.logger.info("Executing Pipeline for %s %s", self.type, self.name)
         pipeline_elements_csv = ', '.join(
             [element.name for element in self.pipeline_elements])
-        self.logger.info("{type} {name} has the following pipeline elements registered: {pipeline_elements}".format(
-            name=self.name,
-            type=self.type,
-            pipeline_elements=pipeline_elements_csv))
+        self.logger.info("%s %s has the following pipeline elements registered: %s", self.type, self.name, pipeline_elements_csv)
         self.run()
         # Update report
         self.post_process()
 
     def post_process(self):
-        """ Generate Report and update Exit Code """
-        pipeline_reports = [
-            element.report for element in self.pipeline_elements]
+        """ _summary_ Generate Report and update Exit Code """
+        pipeline_reports = { element.name: element.report for element in self.pipeline_elements }
         self.report['total_elements'] = len(pipeline_reports)
         self.report['element_reports'] = pipeline_reports
         exit_codes = set([test.exit_code for test in self.pipeline_elements])
@@ -133,12 +158,12 @@ class PipelineElement:
         if 1 in exit_codes:
             self.exit_code = 1
             # switch to codes someday
-            self.report["result"] += "some or all tests fail"
+            self.report["result"] += "some or all tasks fail"
         elif 3 in exit_codes:
             self.exit_code = 3
             self.report["result"] += "warnings present"
         else:
-            self.report["result"] += "all tests passed"
+            self.report["result"] += "all tasks passed"
 
 
 class Stage(PipelineElement):
@@ -192,4 +217,4 @@ class TaskType(ABCMeta):
     def __init__(cls, name, bases, attrs):
         super(TaskType, cls).__init__(name, bases, attrs)
         Pool.register_task(cls)
-        StageType.logger.debug(f"Registering Task {name}")
+        TaskType.logger.debug(f"Registering Task {name}")
