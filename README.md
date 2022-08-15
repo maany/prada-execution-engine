@@ -9,5 +9,15 @@ Make sure you have pipenv installed on your system. To install the project and i
 pipenv install -e .
 ```
 
-Then you should be able to access the `textbook`
+Enter the virtual environment
+
+```
+pipenv shell
+```
+
+Then you should be able to access the `textbook` cli in a `hote-reload` mode and print help with:
+
+```
+textbook
+```
 
