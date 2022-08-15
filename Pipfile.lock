@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "9883f987371b6f1f2587dcedc207e1dfbd19ad9465b00082d002fa3a272c34ce"
+            "sha256": "67a4b0444e9110a99e9899d7e34e2400f04096a9288bd196fce2d667af453da9"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -23,6 +23,10 @@
             ],
             "index": "pypi",
             "version": "==8.1.3"
+        },
+        "textbook": {
+            "editable": true,
+            "path": "."
         }
     },
     "develop": {}
