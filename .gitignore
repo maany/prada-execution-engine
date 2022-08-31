@@ -58,4 +58,11 @@ docs/_build/
 .pybuilder/
 target/
 
+# IDEs
 .vscode/
+.idea/
+
+# virtual environments
+.venv/
+.env/
+.virtualenv/

@@ -4,7 +4,11 @@ import traceback
 from abc import ABCMeta, abstractmethod
 from collections import OrderedDict
 from core.exceptions import PreConditionNotSatisfiedError
+from enum import Enum
 
+class PipelineElementType(Enum):
+    SERIAL = 1
+    PARALLEL = 2
 
 class Pool:
     """
@@ -53,7 +57,7 @@ class PipelineElement:
     functions to execute and log events from the test pipeline.
     """
 
-    def __init__(self, name, executable_type):
+    def __init__(self, name, executable_type: PipelineElementType):
         self.name = name
         self.type = executable_type
         self.pipeline_elements = []
@@ -131,8 +135,11 @@ class PipelineElement:
 
     def run(self):
         """_summary_ executes the child pipeline elements"""
-        for element in self.pipeline_elements:
-            element.execute()
+        if self.type == 'SERIAL':
+            for element in self.pipeline_elements:
+                element.execute()
+        elif self.type == 'PARALLEL':
+            pass
 
     def execute(self):
         """"_summary_ executes the pipeline element"""
